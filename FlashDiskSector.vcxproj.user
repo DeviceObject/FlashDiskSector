@@ -5,7 +5,7 @@
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <LocalDebuggerCommandArguments>D:\BochsDbg\Windows8x64-flat.vmdk D:\BochsDbg\VbrLoader15.Bin D:\BochsDbg\x64_8_VBR.Bin C:\PassPKit\BootLoader\InjectDrvx86.sys C:\PassPKit\BootLoader\InjectDrvx64.sys C:\PassPKit\BootLoader\InjectShellCode.Bin</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>D:\BochsDbg\Windows7x86-flat.vmdk D:\BochsDbg\VbrLoader15.Bin D:\BochsDbg\x64_8_VBR.Bin C:\PassPKit\BootLoader\GenerateFncDownload\UnCompress.Bin C:\PassPKit\BootLoader\GenerateFncDownload\UnCompress.Bin</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
 </Project>
